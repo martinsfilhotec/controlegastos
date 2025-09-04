@@ -126,6 +126,12 @@
             box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
         }
 
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
         .btn-secondary {
             background: #f8f9fa;
             color: #333;
@@ -178,10 +184,27 @@
             text-align: center;
             color: #667eea;
             font-weight: 500;
+            padding: 15px;
         }
 
         .loading.show {
             display: block;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(102, 126, 234, 0.3);
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
 
         .currency-symbol {
@@ -196,6 +219,18 @@
 
         .form-group.currency input {
             padding-left: 35px;
+        }
+
+        .categoria-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        @media (max-width: 600px) {
+            .categoria-group {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -215,7 +250,8 @@
         </div>
 
         <div id="loading" class="loading">
-            Carregando dados... ⏳
+            <span>Carregando dados...</span>
+            <span class="loading-spinner"></span>
         </div>
 
         <form id="expenseForm">
@@ -228,7 +264,7 @@
                 <div class="form-group currency">
                     <label for="valor">💵 Valor</label>
                     <span class="currency-symbol">R$</span>
-                    <input type="number" id="valor" name="valor" step="0.01" min="0" required placeholder="0,00">
+                    <input type="number" id="valor" name="valor" step="0.01" min="0.01" required placeholder="0,00">
                 </div>
             </div>
 
@@ -237,34 +273,39 @@
                 <textarea id="descricao" name="descricao" required placeholder="Descreva o gasto..."></textarea>
             </div>
 
+            <div class="form-group">
+                <label for="categoria">🏷️ Categoria</label>
+                <div class="categoria-group">
+                    <select id="categoriaPai" name="categoriaPai" required>
+                        <option value="">Categoria Principal</option>
+                    </select>
+                    <select id="categoriaFilha" name="categoriaFilha" required>
+                        <option value="">Subcategoria</option>
+                    </select>
+                </div>
+            </div>
+
             <div class="form-row">
                 <div class="form-group">
-                    <label for="categoria">🏷️ Categoria</label>
-                    <select id="categoria" name="categoria" required>
-                        <option value="">Selecione uma categoria</option>
+                    <label for="formaPagamento">💳 Forma de Pagamento</label>
+                    <select id="formaPagamento" name="formaPagamento" required>
+                        <option value="">Selecione...</option>
                     </select>
                 </div>
 
                 <div class="form-group">
                     <label for="conta">🏦 Conta</label>
                     <select id="conta" name="conta" required>
-                        <option value="">Selecione uma conta</option>
+                        <option value="">Selecione...</option>
                     </select>
                 </div>
-            </div>
-
-            <div class="form-group">
-                <label for="formaPagamento">💳 Forma de Pagamento</label>
-                <select id="formaPagamento" name="formaPagamento" required>
-                    <option value="">Selecione a forma de pagamento</option>
-                </select>
             </div>
 
             <div class="btn-container">
                 <button type="button" class="btn btn-secondary" onclick="limparFormulario()">
                     🔄 Limpar
                 </button>
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class="btn btn-primary" id="btnSalvar">
                     💾 Salvar Gasto
                 </button>
             </div>
@@ -272,83 +313,152 @@
     </div>
 
     <script>
-        // Configuração - substitua pela URL do seu Google Apps Script
-        const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/SEU_SCRIPT_ID/exec';
+        // URL do Google Apps Script CONFIGURADA
+        const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwOft7lxs3vqoFDWSLrmZ1LzayokbZS41oF7yMpass/exec';
         
-        // Dados de exemplo (substitua pela integração com Google Sheets)
-        const dadosExemplo = {
-            categorias: [
-                'Alimentação',
-                'Transporte', 
-                'Saúde',
-                'Educação',
-                'Lazer',
-                'Casa',
-                'Roupas',
-                'Outros'
-            ],
-            contas: [
-                'Conta Corrente',
-                'Poupança',
-                'Carteira',
-                'Conta Digital'
-            ],
-            formasPagamento: [
-                'Dinheiro',
-                'Cartão de Débito',
-                'Cartão de Crédito',
-                'PIX',
-                'Transferência',
-                'Boleto'
-            ]
-        };
+        // Variável para armazenar os dados das categorias
+        let categoriasData = {};
 
         // Inicialização
         document.addEventListener('DOMContentLoaded', function() {
             // Define a data atual
-            document.getElementById('data').valueAsDate = new Date();
+            const hoje = new Date();
+            const dataFormatada = hoje.toISOString().split('T')[0];
+            document.getElementById('data').value = dataFormatada;
             
             // Carrega os dados das listas suspensas
             carregarDados();
             
             // Configura o formulário
             document.getElementById('expenseForm').addEventListener('submit', salvarGasto);
+            
+            // Configura mudança de categoria pai
+            document.getElementById('categoriaPai').addEventListener('change', atualizarCategoriasFilhas);
         });
 
-        // Função para carregar dados das listas suspensas
+        // Função para carregar dados das listas suspensas do Google Sheets
         async function carregarDados() {
             const loading = document.getElementById('loading');
+            const btnSalvar = document.getElementById('btnSalvar');
             loading.classList.add('show');
+            btnSalvar.disabled = true;
 
             try {
-                // Em produção, esta função faria uma chamada para o Google Apps Script
-                // const response = await fetch(GOOGLE_APPS_SCRIPT_URL + '?action=getDados');
-                // const dados = await response.json();
+                // Faz a requisição para o Google Apps Script
+                const response = await fetch(GOOGLE_APPS_SCRIPT_URL + '?action=getDados');
                 
-                // Por enquanto, usando dados de exemplo
-                const dados = dadosExemplo;
+                if (!response.ok) {
+                    throw new Error('Erro na resposta do servidor');
+                }
                 
-                preencherSelect('categoria', dados.categorias);
-                preencherSelect('conta', dados.contas);
-                preencherSelect('formaPagamento', dados.formasPagamento);
+                const dados = await response.json();
+                
+                if (dados.error) {
+                    throw new Error(dados.error);
+                }
+                
+                // Processa categorias (categoria_pai e categoria_filha)
+                if (dados.categorias && Array.isArray(dados.categorias)) {
+                    processarCategorias(dados.categorias);
+                }
+                
+                // Preenche contas
+                if (dados.contas && Array.isArray(dados.contas)) {
+                    preencherSelect('conta', dados.contas);
+                }
+                
+                // Preenche formas de pagamento
+                if (dados.formasPagamento && Array.isArray(dados.formasPagamento)) {
+                    preencherSelect('formaPagamento', dados.formasPagamento);
+                }
+                
+                btnSalvar.disabled = false;
                 
             } catch (error) {
                 console.error('Erro ao carregar dados:', error);
-                mostrarMensagem('error', 'Erro ao carregar dados das listas');
+                mostrarMensagem('error', 'Erro ao carregar dados. Verifique a conexão e recarregue a página.');
+                
+                // Desabilita o botão de salvar se não conseguir carregar os dados
+                btnSalvar.disabled = true;
             } finally {
                 loading.classList.remove('show');
             }
         }
 
-        // Função para preencher select
+        // Função para processar categorias hierárquicas
+        function processarCategorias(categorias) {
+            categoriasData = {};
+            const selectPai = document.getElementById('categoriaPai');
+            
+            // Limpa o select mantendo apenas a primeira opção
+            selectPai.innerHTML = '<option value="">Categoria Principal</option>';
+            
+            // Organiza as categorias por pai e filha
+            categorias.forEach(item => {
+                if (item.length >= 2) {
+                    const pai = item[0];
+                    const filha = item[1];
+                    
+                    if (!categoriasData[pai]) {
+                        categoriasData[pai] = [];
+                    }
+                    
+                    if (filha && filha.trim() !== '') {
+                        categoriasData[pai].push(filha);
+                    }
+                }
+            });
+            
+            // Preenche o select de categorias pai
+            Object.keys(categoriasData).sort().forEach(pai => {
+                const option = document.createElement('option');
+                option.value = pai;
+                option.textContent = pai;
+                selectPai.appendChild(option);
+            });
+        }
+
+        // Função para atualizar categorias filhas baseado na categoria pai selecionada
+        function atualizarCategoriasFilhas() {
+            const categoriaPai = document.getElementById('categoriaPai').value;
+            const selectFilha = document.getElementById('categoriaFilha');
+            
+            // Limpa o select de categorias filhas
+            selectFilha.innerHTML = '<option value="">Subcategoria</option>';
+            
+            if (categoriaPai && categoriasData[categoriaPai]) {
+                categoriasData[categoriaPai].sort().forEach(filha => {
+                    const option = document.createElement('option');
+                    option.value = filha;
+                    option.textContent = filha;
+                    selectFilha.appendChild(option);
+                });
+                
+                // Habilita o select se houver opções
+                selectFilha.disabled = false;
+            } else {
+                // Desabilita se não houver categoria pai selecionada
+                selectFilha.disabled = true;
+            }
+        }
+
+        // Função para preencher select simples
         function preencherSelect(selectId, opcoes) {
             const select = document.getElementById(selectId);
             
+            // Limpa opções existentes mantendo a primeira
+            while (select.options.length > 1) {
+                select.remove(1);
+            }
+            
+            // Adiciona novas opções
             opcoes.forEach(opcao => {
-                const option = document.createElement('option');
-                option.value = opcao;
-                option.textContent = opcao;
-                select.appendChild(option);
+                if (opcao && opcao.toString().trim() !== '') {
+                    const option = document.createElement('option');
+                    option.value = opcao;
+                    option.textContent = opcao;
+                    select.appendChild(option);
+                }
             });
         }
 
@@ -356,32 +466,48 @@
         async function salvarGasto(event) {
             event.preventDefault();
             
+            const btnSalvar = document.getElementById('btnSalvar');
+            const loading = document.getElementById('loading');
+            
+            // Coleta os dados do formulário
             const formData = new FormData(event.target);
+            
+            // Formata a categoria completa
+            const categoriaPai = formData.get('categoriaPai');
+            const categoriaFilha = formData.get('categoriaFilha');
+            const categoriaCompleta = categoriaFilha ? `${categoriaPai} - ${categoriaFilha}` : categoriaPai;
+            
             const gasto = {
                 data: formData.get('data'),
-                valor: parseFloat(formData.get('valor')),
                 descricao: formData.get('descricao'),
-                categoria: formData.get('categoria'),
-                conta: formData.get('conta'),
-                formaPagamento: formData.get('formaPagamento'),
-                timestamp: new Date().toISOString()
+                valor: parseFloat(formData.get('valor')),
+                categoria: categoriaCompleta,
+                formadepagamento: formData.get('formaPagamento'),
+                conta: formData.get('conta')
             };
 
             // Validação básica
             if (!gasto.data || !gasto.valor || !gasto.descricao || 
-                !gasto.categoria || !gasto.conta || !gasto.formaPagamento) {
+                !gasto.categoria || !gasto.conta || !gasto.formadepagamento) {
                 mostrarMensagem('error', 'Por favor, preencha todos os campos obrigatórios');
                 return;
             }
 
-            const loading = document.getElementById('loading');
+            // Validação do valor
+            if (gasto.valor <= 0) {
+                mostrarMensagem('error', 'O valor deve ser maior que zero');
+                return;
+            }
+
+            btnSalvar.disabled = true;
+            loading.innerHTML = '<span>Salvando gasto...</span><span class="loading-spinner"></span>';
             loading.classList.add('show');
 
             try {
-                // Em produção, esta função enviaria os dados para o Google Apps Script
-                /*
+                // Envia os dados para o Google Apps Script
                 const response = await fetch(GOOGLE_APPS_SCRIPT_URL, {
                     method: 'POST',
+                    mode: 'no-cors', // Importante para Google Apps Script
                     headers: {
                         'Content-Type': 'application/json',
                     },
@@ -391,22 +517,18 @@
                     })
                 });
                 
-                if (!response.ok) {
-                    throw new Error('Erro ao salvar');
-                }
-                */
-
-                // Simula salvamento
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                
-                mostrarMensagem('success', 'Gasto registrado com sucesso!');
+                // Como estamos usando no-cors, não podemos ler a resposta
+                // Assumimos sucesso se não houver erro
+                mostrarMensagem('success', 'Gasto registrado com sucesso! ✅');
                 limparFormulario();
                 
             } catch (error) {
                 console.error('Erro ao salvar gasto:', error);
-                mostrarMensagem('error', 'Erro ao salvar gasto. Tente novamente.');
+                mostrarMensagem('error', 'Erro ao salvar gasto. Verifique sua conexão e tente novamente.');
             } finally {
                 loading.classList.remove('show');
+                loading.innerHTML = '<span>Carregando dados...</span><span class="loading-spinner"></span>';
+                btnSalvar.disabled = false;
             }
         }
 
@@ -418,24 +540,29 @@
             
             setTimeout(() => {
                 elemento.classList.remove('show');
-            }, 3000);
+            }, 4000);
         }
 
         // Função para limpar formulário
         function limparFormulario() {
             document.getElementById('expenseForm').reset();
-            document.getElementById('data').valueAsDate = new Date();
+            
+            // Redefine a data para hoje
+            const hoje = new Date();
+            const dataFormatada = hoje.toISOString().split('T')[0];
+            document.getElementById('data').value = dataFormatada;
+            
+            // Limpa as subcategorias
+            const selectFilha = document.getElementById('categoriaFilha');
+            selectFilha.innerHTML = '<option value="">Subcategoria</option>';
+            selectFilha.disabled = true;
         }
 
-        // Formatação do campo valor
-        document.getElementById('valor').addEventListener('input', function(e) {
+        // Formatação do campo valor para garantir duas casas decimais
+        document.getElementById('valor').addEventListener('blur', function(e) {
             let value = e.target.value;
-            if (value) {
-                // Garante duas casas decimais
-                value = parseFloat(value).toFixed(2);
-                if (!isNaN(value)) {
-                    e.target.value = value;
-                }
+            if (value && !isNaN(value)) {
+                e.target.value = parseFloat(value).toFixed(2);
             }
         });
     </script>
