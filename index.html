@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lançamento de Gastos</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.2rem;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+            position: relative;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+            font-size: 1rem;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 1rem;
+            background: white;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 600px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .btn-container {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 15px 25px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #333;
+            border: 2px solid #e1e5e9;
+        }
+
+        .btn-secondary:hover {
+            background: #e9ecef;
+            transform: translateY(-1px);
+        }
+
+        .success-message {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 500;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+        }
+
+        .success-message.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .error-message {
+            background: linear-gradient(135deg, #dc3545, #e74c3c);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 500;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+        }
+
+        .error-message.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            color: #667eea;
+            font-weight: 500;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .currency-symbol {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #666;
+            font-weight: 500;
+            pointer-events: none;
+        }
+
+        .form-group.currency input {
+            padding-left: 35px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>💰 Controle de Gastos</h1>
+            <p>Registre seus gastos de forma organizada</p>
+        </div>
+
+        <div id="successMessage" class="success-message">
+            Gasto registrado com sucesso! ✅
+        </div>
+
+        <div id="errorMessage" class="error-message">
+            Erro ao registrar gasto. Tente novamente.
+        </div>
+
+        <div id="loading" class="loading">
+            Carregando dados... ⏳
+        </div>
+
+        <form id="expenseForm">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="data">📅 Data</label>
+                    <input type="date" id="data" name="data" required>
+                </div>
+
+                <div class="form-group currency">
+                    <label for="valor">💵 Valor</label>
+                    <span class="currency-symbol">R$</span>
+                    <input type="number" id="valor" name="valor" step="0.01" min="0" required placeholder="0,00">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="descricao">📝 Descrição</label>
+                <textarea id="descricao" name="descricao" required placeholder="Descreva o gasto..."></textarea>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="categoria">🏷️ Categoria</label>
+                    <select id="categoria" name="categoria" required>
+                        <option value="">Selecione uma categoria</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="conta">🏦 Conta</label>
+                    <select id="conta" name="conta" required>
+                        <option value="">Selecione uma conta</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="formaPagamento">💳 Forma de Pagamento</label>
+                <select id="formaPagamento" name="formaPagamento" required>
+                    <option value="">Selecione a forma de pagamento</option>
+                </select>
+            </div>
+
+            <div class="btn-container">
+                <button type="button" class="btn btn-secondary" onclick="limparFormulario()">
+                    🔄 Limpar
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    💾 Salvar Gasto
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        // Configuração - substitua pela URL do seu Google Apps Script
+        const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/SEU_SCRIPT_ID/exec';
+        
+        // Dados de exemplo (substitua pela integração com Google Sheets)
+        const dadosExemplo = {
+            categorias: [
+                'Alimentação',
+                'Transporte', 
+                'Saúde',
+                'Educação',
+                'Lazer',
+                'Casa',
+                'Roupas',
+                'Outros'
+            ],
+            contas: [
+                'Conta Corrente',
+                'Poupança',
+                'Carteira',
+                'Conta Digital'
+            ],
+            formasPagamento: [
+                'Dinheiro',
+                'Cartão de Débito',
+                'Cartão de Crédito',
+                'PIX',
+                'Transferência',
+                'Boleto'
+            ]
+        };
+
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function() {
+            // Define a data atual
+            document.getElementById('data').valueAsDate = new Date();
+            
+            // Carrega os dados das listas suspensas
+            carregarDados();
+            
+            // Configura o formulário
+            document.getElementById('expenseForm').addEventListener('submit', salvarGasto);
+        });
+
+        // Função para carregar dados das listas suspensas
+        async function carregarDados() {
+            const loading = document.getElementById('loading');
+            loading.classList.add('show');
+
+            try {
+                // Em produção, esta função faria uma chamada para o Google Apps Script
+                // const response = await fetch(GOOGLE_APPS_SCRIPT_URL + '?action=getDados');
+                // const dados = await response.json();
+                
+                // Por enquanto, usando dados de exemplo
+                const dados = dadosExemplo;
+                
+                preencherSelect('categoria', dados.categorias);
+                preencherSelect('conta', dados.contas);
+                preencherSelect('formaPagamento', dados.formasPagamento);
+                
+            } catch (error) {
+                console.error('Erro ao carregar dados:', error);
+                mostrarMensagem('error', 'Erro ao carregar dados das listas');
+            } finally {
+                loading.classList.remove('show');
+            }
+        }
+
+        // Função para preencher select
+        function preencherSelect(selectId, opcoes) {
+            const select = document.getElementById(selectId);
+            
+            opcoes.forEach(opcao => {
+                const option = document.createElement('option');
+                option.value = opcao;
+                option.textContent = opcao;
+                select.appendChild(option);
+            });
+        }
+
+        // Função para salvar gasto
+        async function salvarGasto(event) {
+            event.preventDefault();
+            
+            const formData = new FormData(event.target);
+            const gasto = {
+                data: formData.get('data'),
+                valor: parseFloat(formData.get('valor')),
+                descricao: formData.get('descricao'),
+                categoria: formData.get('categoria'),
+                conta: formData.get('conta'),
+                formaPagamento: formData.get('formaPagamento'),
+                timestamp: new Date().toISOString()
+            };
+
+            // Validação básica
+            if (!gasto.data || !gasto.valor || !gasto.descricao || 
+                !gasto.categoria || !gasto.conta || !gasto.formaPagamento) {
+                mostrarMensagem('error', 'Por favor, preencha todos os campos obrigatórios');
+                return;
+            }
+
+            const loading = document.getElementById('loading');
+            loading.classList.add('show');
+
+            try {
+                // Em produção, esta função enviaria os dados para o Google Apps Script
+                /*
+                const response = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'salvarGasto',
+                        data: gasto
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Erro ao salvar');
+                }
+                */
+
+                // Simula salvamento
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                mostrarMensagem('success', 'Gasto registrado com sucesso!');
+                limparFormulario();
+                
+            } catch (error) {
+                console.error('Erro ao salvar gasto:', error);
+                mostrarMensagem('error', 'Erro ao salvar gasto. Tente novamente.');
+            } finally {
+                loading.classList.remove('show');
+            }
+        }
+
+        // Função para mostrar mensagens
+        function mostrarMensagem(tipo, texto) {
+            const elemento = document.getElementById(tipo === 'success' ? 'successMessage' : 'errorMessage');
+            elemento.textContent = texto;
+            elemento.classList.add('show');
+            
+            setTimeout(() => {
+                elemento.classList.remove('show');
+            }, 3000);
+        }
+
+        // Função para limpar formulário
+        function limparFormulario() {
+            document.getElementById('expenseForm').reset();
+            document.getElementById('data').valueAsDate = new Date();
+        }
+
+        // Formatação do campo valor
+        document.getElementById('valor').addEventListener('input', function(e) {
+            let value = e.target.value;
+            if (value) {
+                // Garante duas casas decimais
+                value = parseFloat(value).toFixed(2);
+                if (!isNaN(value)) {
+                    e.target.value = value;
+                }
+            }
+        });
+    </script>
+</body>
+</html>
