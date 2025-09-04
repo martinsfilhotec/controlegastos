@@ -327,36 +327,32 @@
         });
 
         async function carregarDados() {
-            const loading = document.getElementById('loading');
-            const btnSalvar = document.getElementById('btnSalvar');
-            loading.classList.add('show');
-            btnSalvar.disabled = true;
-
             try {
+                exibirMensagem("Carregando dados...", false, true);
+        
                 const response = await fetch(GOOGLE_APPS_SCRIPT_URL + '?action=getDados');
-                if (!response.ok) throw new Error('Erro na resposta do servidor');
                 const dados = await response.json();
-                if (dados.error) throw new Error(dados.error);
-
-                // 🔹 Corrigido: agora lê dados.data
-                if (dados.data) {
-                    if (dados.data.categorias && Array.isArray(dados.data.categorias)) {
-                        processarCategorias(dados.data.categorias);
-                    }
-                    if (dados.data.contas && Array.isArray(dados.data.contas)) {
-                        preencherSelect('conta', dados.data.contas);
-                    }
-                    if (dados.data.formasPagamento && Array.isArray(dados.data.formasPagamento)) {
-                        preencherSelect('formaPagamento', dados.data.formasPagamento);
-                    }
+        
+                if (!dados.success) {
+                    throw new Error(dados.error || "Erro ao buscar dados");
                 }
-                btnSalvar.disabled = false;
+        
+                const info = dados.data;
+        
+                if (info.categorias && Array.isArray(info.categorias)) {
+                    processarCategorias(info.categorias);
+                }
+                if (info.contas && Array.isArray(info.contas)) {
+                    preencherSelect('conta', info.contas);
+                }
+                if (info.formasPagamento && Array.isArray(info.formasPagamento)) {
+                    preencherSelect('formaPagamento', info.formasPagamento);
+                }
+        
+                limparMensagem();
             } catch (error) {
-                console.error('Erro ao carregar dados:', error);
-                mostrarMensagem('error', 'Erro ao carregar dados. Verifique a conexão e recarregue a página.');
-                btnSalvar.disabled = true;
-            } finally {
-                loading.classList.remove('show');
+                exibirMensagem("Erro ao carregar dados. Verifique a conexão e recarregue a página.", true);
+                console.error("Erro em carregarDados:", error);
             }
         }
 
