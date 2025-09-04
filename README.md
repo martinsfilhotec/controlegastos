@@ -1,2 +1,2 @@
-# controle_gastos
+# controlegastos
 Sistema de controle de gastos pessoais
